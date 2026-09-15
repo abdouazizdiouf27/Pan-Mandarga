@@ -1,0 +1,71 @@
+# /etc/systemd/system/pan-mandarga.service
+# Service systemd pour PAN Mandarga (Next.js standalone production)
+#
+# Installation :
+#   sudo cp deploy/pan-mandarga.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now pan-mandarga
+#
+# Logs :
+#   sudo journalctl -u pan-mandarga -f
+#
+# Redémarrage après mise à jour du code :
+#   sudo systemctl restart pan-mandarga
+
+[Unit]
+Description=PAN Mandarga — Site e-commerce (Next.js)
+Documentation=https://panmandarga.sn
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+
+# Utilisateur système dédié (jamais root)
+User=pan
+Group=pan
+
+# Répertoire de l'application (build standalone Next.js)
+WorkingDirectory=/opt/pan-mandarga
+
+# Variables d'environnement (chargées depuis .env via EnvironmentFile)
+EnvironmentFile=/opt/pan-mandarga/.env
+
+# Variables critiques (redondantes avec .env au cas où EnvironmentFile échoue)
+Environment=NODE_ENV=production
+Environment=PORT=3000
+Environment=HOSTNAME=127.0.0.1
+
+# Démarrage du serveur standalone Next.js (build avec `next build` + output: standalone)
+ExecStart=/usr/bin/node /opt/pan-mandarga/.next/standalone/server.js
+
+# Redémarrage automatique en cas de crash
+Restart=on-failure
+RestartSec=5s
+StartLimitBurst=3
+StartLimitIntervalSec=60
+
+# Limites de ressources — Next.js + sharp ont besoin de mémoire
+MemoryMax=1G
+MemoryHigh=768M
+
+# Logs stdout/stderr → journalctl
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=pan-mandarga
+
+# Sécurité — verrouillage du service
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/pan-mandarga /opt/pan-mandarga/.next
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictNamespaces=true
+RestrictRealtime=true
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target

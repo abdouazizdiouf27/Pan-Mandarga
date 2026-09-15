@@ -1,0 +1,72 @@
+# Caddyfile — PAN Mandarga
+#
+# Configuration de production :
+#   - Domaine configuré via variable d'environnement PAN_DOMAIN
+#   - HTTPS automatique (Let's Encrypt)
+#   - Reverse proxy vers Next.js standalone sur :3000
+#   - Compression gzip
+#   - Headers de sécurité
+#
+# Utilisation (VPS) :
+#   1. Installer Caddy : https://caddyserver.com/docs/install
+#   2. Copier ce fichier dans /etc/caddy/Caddyfile
+#   3. Définir PAN_DOMAIN : export PAN_DOMAIN=panmandarga.sn
+#      (ou remplacer {$PAN_DOMAIN} ci-dessous par le domaine en dur)
+#   4. Recharger : sudo systemctl reload caddy
+#
+# En développement : Caddy écoute sur :81 et reverse proxy vers :3000
+# (configuration existante du sandbox).
+
+# === Production ===
+{$PAN_DOMAIN:panmandarga.sn} {
+	encode zstd gzip
+
+	header {
+		# Sécurité
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "SAMEORIGIN"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		# Cache immuable pour les assets Next.js buildés
+		/uploads/* Cache-Control "public, max-age=31536000, immutable"
+	}
+
+	# Reverse proxy vers Next.js standalone
+	reverse_proxy 127.0.0.1:3000 {
+		header_up Host {host}
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Forwarded-Proto {scheme}
+		header_up X-Real-IP {remote_host}
+	}
+
+	# Compression pour les réponses dynamiques de Next.js
+	# (déjà géré par encode ci-dessus)
+}
+
+# === Développement (sandbox) ===
+# Caddy écoute sur :81 et reverse proxy vers :3000
+# Permet à l'agent-browser de tester via le port 81
+:81 {
+	@transform_port_query {
+		query XTransformPort=*
+	}
+
+	handle @transform_port_query {
+		reverse_proxy localhost:{query.XTransformPort} {
+			header_up Host {host}
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Proto {scheme}
+			header_up X-Real-IP {remote_host}
+		}
+	}
+
+	handle {
+		reverse_proxy localhost:3000 {
+			header_up Host {host}
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Proto {scheme}
+			header_up X-Real-IP {remote_host}
+		}
+	}
+}
